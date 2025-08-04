@@ -1,0 +1,20 @@
+@startuml
+actor Operator
+participant "MES Frontend" as frontend
+participant "MES API" as api
+participant "Redis Cache" as cache
+participant "MES DB" as db
+participant "Message Queue" as mq
+
+title Обновление статуса заказа и инвалидация кеша
+
+Operator -> frontend: Меняет статус заказа #123 на "completed"
+frontend -> api: PUT /orders/123/status
+api -> db: UPDATE orders SET status = 'completed' WHERE id = 123
+db --> api: OK
+api -> cache: DEL orders:status:in_progress
+api -> cache: DEL orders:status:completed
+api -> mq: Отправляет сообщение "order.status.updated"
+api --> frontend: Статус обновлён
+frontend --> Operator: Статус изменён
+@enduml

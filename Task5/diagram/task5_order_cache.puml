@@ -1,0 +1,19 @@
+@startuml
+actor Operator
+participant "MES Frontend" as frontend
+participant "MES API" as api
+participant "Redis Cache" as cache
+participant "MES DB" as db
+
+title Чтение списка заказов с кешированием (Cache-Aside)
+
+Operator -> frontend: Открывает дашборд
+frontend -> api: GET /orders?status=in_progress
+api -> cache: GET orders:status:in_progress
+cache --> api: Кеш пуст (miss)
+api -> db: SELECT * FROM orders WHERE status = 'in_progress'
+db --> api: Возвращает 150 заказов
+api -> cache: SET orders:status:in_progress = [orders] (TTL=300)
+api --> frontend: Возвращает список
+frontend --> Operator: Показывает заказы
+@enduml
