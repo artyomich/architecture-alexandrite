@@ -1,0 +1,70 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/RicardoNiepel/C4-PlantUML/master/C4_Container.puml
+!includeurl https://raw.githubusercontent.com/RicardoNiepel/C4-PlantUML/master/C4_Context.puml
+
+' Люди (акторы)
+Person(customer, "Customer", "Пользователь: делает заказ, загружает 3D-модель, использует конструктор")
+Person(seller, "Seller", "Продавец: работает с заказами, подтверждает производство")
+Person(apiUser, "API User", "Внешний партнёр: управляет заказами и расчётом стоимости через API")
+Person(operator, "Operator", "Оператор: берёт заказ в работу, производит изделие")
+
+' Граница системы
+Enterprise_Boundary(jewelrySystem, "Система Jewelry Store System") {
+
+    ' Контейнеры
+    Container(internetShop, "Internet Shop", "Vue, TypeScript, Three.js", "Фронтенд для B2C-пользователей: просмотр товаров, конструктор, загрузка 3D-моделей")
+    Container(shopAPI, "Shop API", "Spring Boot", "Обработка заказов от пользователей, валидация, сохранение данных")
+    Container(shopDB, "Shop DB", "PostgreSQL", "Хранение данных о клиентах, заказах и товарах (B2C)")
+    Container(threeDStorage, "3D Files Storage", "S3-based", "Хранение 3D-моделей клиентов и промежуточных артефактов")
+
+    Container(crm, "CRM", "Vue, TypeScript", "Интерфейс для продавцов: управление заказами, подтверждение производства")
+    Container(crmAPI, "CRM API", "Spring Boot", "Бэкенд CRM: обработка команд, взаимодействие с очередью")
+
+    Container(mes, "MES", "React, TypeScript", "Интерфейс для операторов: просмотр заказов, начало работы")
+    Container(mesAPI, "MES API", "C#", "Расчёт стоимости, назначение заказов, управление производством")
+    Container(mesDB, "MES DB", "PostgreSQL", "Хранение заказов, статусов и назначений с точки зрения производства")
+
+    ContainerQueue(messageQueue, "Messages Queue", "RabbitMQ", "Асинхронный обмен сообщениями между системами: заказы, статусы, уведомления")
+}
+
+' Внешние связи
+
+' Customer -> Internet Shop
+customer --> internetShop : Взаимодействует с интерфейсом
+
+' Seller -> CRM
+seller --> crm : Работает с заказами и клиентами
+
+' API User -> MES API
+apiUser --> mesAPI : Управляет заказами и расчётом стоимости
+
+' Operator -> MES
+operator --> mes : Просматривает и берёт заказы в работу
+
+' Связи внутри системы
+
+' Internet Shop -> Shop API -> DB и Storage
+internetShop --> shopAPI : Создание заказа, загрузка модели
+shopAPI --> shopDB : Сохранение данных о заказе
+shopAPI --> threeDStorage : Сохранение 3D-файла
+shopAPI ..> messageQueue : Отправка события "Новый заказ"
+
+' CRM -> CRM API -> Queue и Storage
+crm --> crmAPI : Управление заказами
+crmAPI --> threeDStorage : Получение 3D-модели для расчёта
+crmAPI ..> messageQueue : Отправка подтверждённого заказа в производство
+messageQueue ..> crmAPI : Получение обновлений статуса от MES
+
+' MES API -> Queue, DB, Storage
+mesAPI ..> messageQueue : Получение новых заказов из CRM и API
+messageQueue ..> mesAPI : Отправка обновлений статуса
+mesAPI --> mesDB : Хранение и чтение данных о заказах
+mesAPI --> threeDStorage : Чтение 3D-моделей для расчёта стоимости
+
+' MES UI -> MES API
+mes --> mesAPI : Просмотр заказов, назначение на себя
+
+' Дополнительная связь: API User -> Queue (косвенно)
+' Через mesAPI, который уже подключён к messageQueue
+
+@enduml
